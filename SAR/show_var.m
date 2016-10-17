@@ -1,0 +1,1 @@
+function x = show_var(H,Vr,La,Kr,Tr,alpha_Fsr,

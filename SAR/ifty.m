@@ -1,2 +1,2 @@
 function y = ifty(x)
-y = fftshift(fft(fftshift(x')))';
+y = fftshift(ifft(fftshift(x.'))).';

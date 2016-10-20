@@ -22,7 +22,8 @@ for i = 1:N
     range = sqrt(delta_x.^2 + H^2 + delta_y^2); % 每个方位采样点 雷达到目标的斜距
     rcs = Targets(i,3); %点目标的后向散射系数
     tau = ones(Na,1) * Tau - (2*range / C)' * ones(1,Nr); % 时间差矩阵
-    phase = pi * Kr * tau.^2 - 4 * pi / lambda * range' * ones(1,Nr);%接收信号相位
-    S = S + rcs * exp(1i * phase) .* ((abs(delta_x) < Lsar / 2)' * ones(1,Nr)) .* (tau > 0 & tau < Tr);
+    phase = pi * Kr * tau.^2 - 4 * pi / lambda * (range' * ones(1,Nr));%接收信号相位
+%     S = S + rcs * exp(1i * phase) .* ((abs(delta_x) < Lsar / 2)' * ones(1,Nr)) .* (tau > 0 & tau < Tr);
+    S = S + rcs * exp(1i * phase) .* ((abs(delta_x) < Lsar / 2)' * ones(1,Nr)) .* (abs(tau) < Tr/2);
 end
 

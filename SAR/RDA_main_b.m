@@ -5,10 +5,10 @@ clc;clear;close all;
 C = 3e8; %光速
 Fc = 1e9;%发射信号载频
 lambda = C / Fc;%发射信号波长
-La = 4;%雷达天线方位向长度
+La = 3;%雷达天线方位向长度
 H = 5000;%雷达平台飞行高度
 V = 150;%雷达飞行速度
-Theta_center = 30 / 180 * pi;%波束中心入射角
+Theta_center = 45 / 180 * pi;%波束中心入射角
 %----------------------------
 
 R0 = H / sin(Theta_center);%波束中心最短斜距
@@ -35,14 +35,14 @@ Fr_alpha = 1.2;%距离向过采样系数
 
 %-----------------------------------------------
 Br = Kr * Tr;%脉冲带宽
-Fr = Fr_alpha * Br;%距离向采样频率
-Tfr = 1 / Fr;%采样间隔
-Nr = ceil(((Rmax - Rmin) * 2 / C + Tr) * Fr);%距离向采样点数
+Fsr = round(Fr_alpha * Br);%距离向采样频率
+Tsr = 1 / Fsr;%采样间隔
+Nr = ceil(((Rmax - Rmin) * 2 / C + Tr) / Tsr);%距离向采样点数
 Nr = 2^nextpow2(Nr);%为了做fft
-tf_org = (-Nr/2:(Nr/2-1))*Tfr;
+tf_org = (-Nr/2:(Nr/2-1))*Tsr;
 Tfast = tf_org + 2*R0/C;%距离向采样时间向量
-% TFr = Tfast * C / 2;
-% Fr = 1/TFr;
+Tsr = ((Rmax - Rmin) * 2 / C + Tr) / Nr;
+Fsr = 1 / Tsr;
 Rr = Tfast * C / 2;%距离向斜距矩阵
 
 
@@ -50,23 +50,23 @@ Rr = Tfast * C / 2;%距离向斜距矩阵
 Fa_alpha = 1.3;%方位向过采样系数
 
 %------------------------------------------------
-Fa = Fa_alpha * abs(Ka * Tsar);%方位向采样频率
+Fa = round(Fa_alpha * abs(Ka * Tsar));%方位向采样频率
 PRF = Fa;%脉冲重复发射周期
 PRT = 1 / Fa;
-Na = ceil(((Xmax - Xmin) + Lsar)/V*PRF);%方位向采样点数
+Na = ceil(((Xmax - Xmin) + Lsar)/V/PRT);%方位向采样点数
 Na = 2^nextpow2(Na);
 Tslow = (-Na/2:(Na/2-1))*PRT;%方位向采样时间矩阵
 Ra = Tslow * V;%方位向采样对应的距离矩阵
-% TFa = ((Xmax-Xmin)+Lsar)/V/Na;
-% PRF = 1 / TFa;
+PRT = ((Xmax-Xmin)+Lsar)/V/Na;
+PRF = 1 / PRT;
 
 
 %点目标坐标
 Targets = [ 20   -50    1
-            20    0      1
-             0    0      1
-           -25    50    1
-           -30   -50    1]; %格式为场景中（地距） 距离向坐标 方位向坐标 RCS
+            20    50    1
+             0    0     1
+           -20    50    1
+           -20   -50    1]; %格式为场景中（地距） 距离向坐标 方位向坐标 RCS
       
 %------------------------------------------
 Targets(:,1:2) = Targets(:,1:2) + ones(size(Targets,1),1) * scene_center;
@@ -86,42 +86,48 @@ for i = 1:N
     echo = echo + rcs * exp(1i * phase) .* ((abs(delta_x) < Lsar / 2)' * ones(1,Nr)) .* (abs(tau)<Tr/2);
 end
 
-mesh(abs(echo));
+figure;
+imagesc(abs(echo));
 %距离压缩
-t = Tfast;
+t = Tfast - 2*R0/C;
 refr = exp(1i*pi*Kr*t.^2) .* (abs(t)<Tr/2);
 signal_comp = ifty(fty(echo) .* (ones(Na,1)*conj(fty(refr))));%参考信号补零后DFT 取共轭
 
-
+figure;
+imagesc(abs(signal_comp));
 
 %距离徙动校正
 signal_rD = ftx(signal_comp);
+signal_rD_rcmc = zeros(Na,Nr);
 win = waitbar(0,'最近邻域插值');
 for i = 1:Na
     for j = 1:Nr
-        delta_R = (1/8)*(lambda/V)^2*(R0+(j-Nr/2)*C/2/Fr)*((j-Nr/2)/Nr*PRF)^2;%距离徙动量
-        RCM = delta_R * 2 * Fr / C;%徙动了多少个距离单元
+        delta_R = (1/8)*(lambda/V)^2*(R0+(j-Nr/2)*Tsr*C/2)*((i-Na/2)/Na*PRF)^2;%距离徙动量
+        RCM = delta_R * 2 * Fsr / C;%徙动了多少个距离单元
         delta_RCM = RCM - floor(RCM);%小数部分
         if round(RCM + j) > Nr
-            signal_rD(i,j) = signal_rD(i,Nr/2);
+            signal_rD_rcmc(i,j) = signal_rD(i,Nr/2);
         else
             if delta_RCM < 0.5
-                signal_rD(i,j) = signal_rD(i,j+floor(RCM));
+                signal_rD_rcmc(i,j) = signal_rD(i,j+floor(RCM));
             else
-                signal_rD(i,j) = signal_rD(i,j+ceil(RCM));
+                signal_rD_rcmc(i,j) = signal_rD(i,j+ceil(RCM));
             end
         end
     end
         waitbar(i/Na);
 end
 close(win);
-signal_rcm = iftx(signal_rD);   
+signal_rcm = iftx(signal_rD_rcmc);   
 
+figure;
+imagesc(255-abs(signal_rcm));
 
 %方位向压缩
-ta = Tslow - Xmin/V;
+ta = Tslow;
 refa = exp(1i*pi*Ka*ta.^2).*(abs(ta) < Tsar/2);
 final_signal = iftx(ftx(signal_rcm) .* (conj(ftx(refa)).' * ones(1,Nr)));
+final_signal_norcm = iftx(ftx(signal_comp) .* (conj(ftx(refa)).' * ones(1,Nr)));
 %绘图
 
 %点目标坐标
@@ -151,10 +157,19 @@ title('RCMC后的信号');
 
 figure;
 colormap(gray);
+subplot(211);
 xx = Yc + (Rr-R0)/sin(Theta_center);
 yy = Ra;
 imagesc(xx,yy,255-abs(final_signal));
+% axis([Yc+Ymin Yc+Ymax Xmin Xmax]);
 xlabel('距离向（米）');
 ylabel('方位向（米）');
 title('最终的点目标');
+
+subplot(212);
+imagesc(xx,yy,255-abs(final_signal_norcm));
+% axis([Yc+Ymin Yc+Ymax Xmin Xmax]);
+xlabel('距离向（米）');
+ylabel('方位向（米）');
+title('最终的点目标,无RCMC');
 

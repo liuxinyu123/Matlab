@@ -1,2 +1,8 @@
-function y = fty(x)
-y = fftshift(fft(fftshift(x.'))).';
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Forward FFT w.r.t. the second variable %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+function fs=fty(s)
+ fs=fftshift(fft(fftshift(s.'))).';
+

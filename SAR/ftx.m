@@ -1,2 +1,9 @@
-function y = ftx(x)
-y = fftshift(fft(fftshift(x)));
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Forward FFT w.r.t. the first variable %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+function fs=ftx(s)
+ fs=fftshift(fft(fftshift(s)));
+
+

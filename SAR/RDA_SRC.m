@@ -35,9 +35,9 @@ Xmin = scene_center(2) - azimuth_width/2;
 Xmax = scene_center(2) + azimuth_width/2;
 
 
-targets = [ scene_center(1)       scene_center(2)      0.8
-            scene_center(1)+200   scene_center(2)      0.5
-%             scene_center(1)-200   scene_center(2)      0.3
+targets = [ scene_center(1)       scene_center(2)        1
+%             scene_center(1)+200   scene_center(2)        1
+%             scene_center(1)-200   scene_center(2)      1
 %             scene_center(1)       scene_center(2)+200  1
 %             scene_center(1)       scene_center(2)-200  1
 %             scene_center(1)+200   scene_center(2)+200  0.7
@@ -63,15 +63,14 @@ ta_end = (Xmax - Ymin * tan(Theta - Beta/2)) / V;
 Ka = -2*V^2*cos(Theta)^2/lambda/Rc;
 Ba = abs(Ka*Tsar);
 alpha_PRF = 1.3;
-PRF = round(alpha_PRF * Ba);
-PRT = 1 / PRF;
+PRF = 2 * round(alpha_PRF * Ba);
 Na = (ta_end - ta_start) * PRF; 
 Na = 2^nextpow2(Na);
 
 fdoc = 2 * V * sin(Theta) / lambda;
 % Mamb = floor(fdoc / PRF);
 % fdoc = fdoc - Mamb*PRF;
-Tslow = [-Na/2:Na/2 - 1] * PRT;
+Tslow = [-Na/2:Na/2 - 1] / PRF;
 distance_azimuth = Tslow * V;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -79,13 +78,13 @@ distance_azimuth = Tslow * V;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%øÏ ±º‰%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 Rnear = Ymin / cos(Theta - Beta/2);
 Rfar = Ymax / cos(Theta + Beta/2);
-
+Rmid = (Rnear + Rfar) / 2;
 alpha_Fr = 1.2;
 Fr = round(alpha_Fr * Br);
 Nr = (2*(Rfar - Rnear)/C + Tr) * Fr;
 Nr = 2^nextpow2(Nr);
 
-Tfast = [-Nr/2:Nr/2 - 1]/Fr + 2 * Rc / C;
+Tfast = [-Nr/2:Nr/2 - 1]/Fr + 2 * Rmid / C;
 distance_range = Tfast * C / 2;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -166,11 +165,21 @@ title('Raw signal');
 % xlim([min(omega_azimuth) max(omega_azimuth)]);
 % title('Spectrum of range chirp');
 %%%%%%%%%%%%%%%%%%%%%%æ‡¿Î—πÀı%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-t = Tfast - 2 * Rc / C;
-chirp_range = exp(1i * pi * Kr * t.^2) .* (abs(t) < Tr / 2);
-signal_Ra = fty(echo) .* (ones(Na,1) * conj(fty(chirp_range))); 
-signal_comp = ifty(signal_Ra);
+% t = Tfast - 2 * Rc / C;
+% chirp_range = exp(1i * pi * Kr * t.^2) .* (abs(t) < Tr / 2);
+% signal_Ra = fty(echo) .* (ones(Na,1) * conj(fty(chirp_range)));
 
+f_range = [-Nr/2:Nr/2-1]/Nr*Fr;
+H_range = exp(1i * pi * (f_range.^2) / Kr);
+alpha = [-Fr/2:Fr/2-1]/Fr;
+signal_Ra = fty(echo) .* (ones(Na,1) * H_range) ;%.* (exp(-1i*pi*fdoc*Tslow).' * ones(1,Nr));
+signal_comp = ifty(signal_Ra);
+signal_rA = ftx(signal_comp);
+% 
+% figure;
+% plot(abs(signal_comp(256,:)),'r');
+% hold on;
+% plot(abs(signal_rA(256,:)),'g');
 %%%%%%%%%%%%%%%%%%%%%%%%%%œ‘ ææ‡¿Î—πÀı∫ÛµƒÕºœÒ%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 figure;
 colormap('gray');
@@ -179,85 +188,42 @@ xlabel('Range axis');
 ylabel('Azimuth axis');
 title('Range compression');
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%SRC%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%SRC in RTAF%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+       
 signal_RA = ftx(signal_Ra);
-% f_azimuth = zeros(1,Na);
-% f_azimuth_temp = (fdoc - PRF/2):(1 / Total_time):(fdoc + PRF/2);
-% length_azimuth = length(t_azimuth);
-% % f_azimuth(ceil((Na - length_azimuth)/2):ceil((Na - length_azimuth)/2) + length_azimuth - 1) = f_azimuth_temp;
-% f_range = zeros(1,Nr);
-% f_range_temp= -Fr/2:1/Tr:Fr/2;
-% length_range = length(t_range);
-% f_range(ceil((Nr - length_range) / 2):ceil((Nr - length_range) / 2) + length_range - 1) = f_range_temp;
-f_range = linspace(-Fr/2,Fr/2,Nr);
-f_azimuth = linspace(fdoc - PRF/2,fdoc + PRF/2,Na);
-D = sqrt(1 - (lambda * f_azimuth / 2 / V).^2);
-Ksrc = 2 * V^2 * fc^3 / C / R0 .* D.^3 ./f_azimuth;
-
-H_src = exp(-1i * pi * (ones(Na,1) * f_range.^2) ./(Ksrc' * ones(1,Nr)));
-signal_RA_src = signal_RA .* H_src;
+r = R0;
+f_azimuth = fdoc + [-Na/2:Na/2-1]/Na*PRF;
+d = sqrt(1-(lambda*f_azimuth/2/V).^2);
+h_src = exp(-1i*pi*r*C/2/V^2/fc^3*(f_azimuth'.^2 ./ d'.^3  * ones(1,Nr)) .* (ones(Na,1) * f_range.^2));
+signal_RA_src = signal_RA .* h_src;
 signal_rA_src = ifty(signal_RA_src);
 signal_ra_src = iftx(signal_rA_src);
-signal_ra = iftx(ifty(signal_RA));
-
-figure;
-subplot(211);
-% colormap('gray');
-imagesc(abs(signal_ra));
-title('No SRC');
-
-subplot(212);
-% colormap('gray');
-imagesc(abs(signal_ra_src));
-title('After SRC');
-signal_RD = signal_rA_src;
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%RCMC%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-win = waitbar(0,'Sinc ≤Â÷µ');
-length_core = 4;
-signal_rcmc = zeros(Na,Nr);
 
+% range = distance_range * cos(Theta);
+% delta_range = C/2/Fr;
+% rcm = (ones(Na,1) * range) .* ((1./d' - 1) * ones(1,Nr));
+% h_rcmc = exp(1i*4*pi/C*(ones(Na,1) *f_range) .* rcm);
+% signal_RA_src_rcm = signal_RA_src .* h_rcmc;
+% signal_rA_src_rcm = ifty(signal_RA_src_rcm);
+% FF = ones(Na,1) * f_range;
+% FU = f_azimuth' * ones(1,Nr);
+% Refcorr = exp(1i * pi / fc^2 / Ka * (FU.*FF).^2 + 1i * pi * fdoc^2 / fc / Ka * FF - 1i * pi / fc / Ka * FU.^2 .* FF); 
+% signal_RA_src_rcmc = signal_RA_src .* Refcorr;
+% signal_rA_src_rcmc = ifty(signal_RA_src_rcmc);
+delta_range = C/2/Fr; 
+% r0 = distance_range * cos(Theta);
+curve=(1./sqrt(1-(f_azimuth*lambda/2/V).^2)'-1)*R0/delta_range;
+
+alpha_Nr=([-Nr/2:Nr/2-1]/Nr);
 for i = 1:Na
-    for j = 1:Nr
-        fa = f_azimuth(i);
-        D = sqrt(1 - (fa*lambda/2/V)^2);
-        r = (Rc + (i - Nr/2)/Fr * C / 2) * cos(Theta);
-        rcm = r * (1/D - 1);
-        n_rcm = 2 * r / C * Fr;
-        delta_nrcm = n_rcm - floor(n_rcm);
-        
-        if j+n_rcm > Nr
-            signal_rcmc(i,j) = signal_RD(i,Nr/2);
-        else
-            if delta_nrcm < 0.5
-                signal_rcmc(i,j) = signal_RD(i,j + floor(n_rcm));
-            else
-                signal_rcmc(i,j) = signal_RD(i,j + ceil(n_rcm));
-            end
-        end
-    
-%         for k = -length_core/2 : length_core/2 - 1
-%             if j+rcm+k > Nr
-%                 signal_rcmc = signal_rcmc + signal_RD(i,Nr) * sinc(k+n_rcm);
-%             else
-%                 signal_rcmc = signal_rcmc + signal_RD(i,j + round(n_rcm) + k) * sinc(delta_nrcm + k);
-%             end
-%         end
-    end
-    waitbar(i/Na);
+    signal_rA_src(i,:) = fftshift(ifft(fftshift(fft(fftshift(signal_rA_src(i,:))) .* exp(1i*2*pi*curve(i)*alpha_Nr))));
 end
-   
-close(win);
-
-figure;
-imagesc(abs(iftx(signal_rcmc)));
-title('After RCMC');
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%Azimuth Compression%%%%%%%%%%%%%%%%%%%%%%%%%
-t = Tslow - scene_center(2)/V;
-chirp_azimuth = exp(1i * pi * Ka * t.^2) .* (abs(t) < Tsar/2);
-signal_RD = ftx(signal_comp);
-signal_final = iftx(signal_RD .* (conj(ftx(chirp_azimuth)).' * ones(1,Nr)));
+r0 = distance_range * cos(Theta);
+H_azimuth = exp(1i*4*pi/lambda*R0.*d);
+signal_final = iftx(signal_rA_src .* (H_azimuth.' * ones(1,Nr)));
 
 figure;
 imagesc(abs(signal_final));

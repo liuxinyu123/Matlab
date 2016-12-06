@@ -63,7 +63,7 @@ ta_end = (Xmax - Ymin * tan(Theta - Beta/2)) / V;
 Ka = -2*V^2*cos(Theta)^2/lambda/Rc;
 Ba = abs(Ka*Tsar);
 alpha_PRF = 1.3;
-PRF = 2 * round(alpha_PRF * Ba);
+PRF =  2 * round(alpha_PRF * Ba);
 Na = (ta_end - ta_start) * PRF; 
 Na = 2^nextpow2(Na);
 
@@ -169,17 +169,20 @@ title('Raw signal');
 % chirp_range = exp(1i * pi * Kr * t.^2) .* (abs(t) < Tr / 2);
 % signal_Ra = fty(echo) .* (ones(Na,1) * conj(fty(chirp_range)));
 
+Mamb = round(fdoc / PRF);
+delta_fdoc = fdoc - Mamb * PRF;
+
 f_range = [-Nr/2:Nr/2-1]/Nr*Fr;
-H_range = exp(1i * pi * (f_range.^2) / Kr);
+H_range = exp(1i * pi * (f_range.^2) / Kr) .* kaiser(Nr,2.5)';
 alpha = [-Fr/2:Fr/2-1]/Fr;
-signal_Ra = fty(echo) .* (ones(Na,1) * H_range) ;%.* (exp(-1i*pi*fdoc*Tslow).' * ones(1,Nr));
+signal_Ra = fty(echo) .* (ones(Na,1) * H_range) .* (exp(-1i*2*pi*delta_fdoc*Tslow).' * ones(1,Nr));
 signal_comp = ifty(signal_Ra);
-signal_rA = ftx(signal_comp);
+% signal_rA = ftx(signal_comp);
 % 
 % figure;
-% plot(abs(signal_comp(256,:)),'r');
+% plot(abs(signal_comp1(512,:)),'r');
 % hold on;
-% plot(abs(signal_rA(256,:)),'g');
+% plot(abs(signal_comp2(512,:)),'g');
 %%%%%%%%%%%%%%%%%%%%%%%%%%ÏÔÊ¾¾àÀëÑ¹ËõºóµÄÍ¼Ïñ%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 figure;
 colormap('gray');
@@ -188,7 +191,7 @@ xlabel('Range axis');
 ylabel('Azimuth axis');
 title('Range compression');
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%SRC in RTAF%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%SRC in RFAF%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
        
 signal_RA = ftx(signal_Ra);
 r = R0;
@@ -197,7 +200,14 @@ d = sqrt(1-(lambda*f_azimuth/2/V).^2);
 h_src = exp(-1i*pi*r*C/2/V^2/fc^3*(f_azimuth'.^2 ./ d'.^3  * ones(1,Nr)) .* (ones(Na,1) * f_range.^2));
 signal_RA_src = signal_RA .* h_src;
 signal_rA_src = ifty(signal_RA_src);
+% signal_rA_src_shift = zeros(Na,Nr);
+% signal_rA_src_shift = signal_rA_src()
+% signal_Ra_src = iftx(signal_RA_src);
 signal_ra_src = iftx(signal_rA_src);
+
+% Mamb = round(fdoc / PRF);
+% delta_fdoc = fdoc - Mamb * PRF;
+% signal_rA_src = ftx(signal_ra_src .* (exp(-1i*2*pi*delta_fdoc*Tslow).' * ones(1,Nr)));
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%RCMC%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % range = distance_range * cos(Theta);
@@ -213,18 +223,30 @@ signal_ra_src = iftx(signal_rA_src);
 % signal_rA_src_rcmc = ifty(signal_RA_src_rcmc);
 delta_range = C/2/Fr; 
 % r0 = distance_range * cos(Theta);
-curve=(1./sqrt(1-(f_azimuth*lambda/2/V).^2)'-1)*R0/delta_range;
+R0 = Rmid * cos(Theta);
+% f_azimuth = fdoc - delta_fdoc + [-Na/2:Na/2-1]/Na*PRF;
+n_rcm=(1./sqrt(1-(f_azimuth*lambda/2/V).^2)'-1)*R0/delta_range;
 
 alpha_Nr=([-Nr/2:Nr/2-1]/Nr);
 for i = 1:Na
-    signal_rA_src(i,:) = fftshift(ifft(fftshift(fft(fftshift(signal_rA_src(i,:))) .* exp(1i*2*pi*curve(i)*alpha_Nr))));
-end
+    signal_rA_src(i,:) = fftshift(ifft(fftshift(fft(fftshift(signal_rA_src(i,:))) .* exp(1i*2*pi*n_rcm(i)*alpha_Nr))));
+end 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%Azimuth Compression%%%%%%%%%%%%%%%%%%%%%%%%%
+f_azimuth = fdoc + [-Na/2:Na/2-1]/Na*PRF;
+d = sqrt(1-(lambda*f_azimuth/2/V).^2);
 r0 = distance_range * cos(Theta);
-H_azimuth = exp(1i*4*pi/lambda*R0.*d);
+H_azimuth = exp(1i*4*pi/lambda*R0.*d) .* kaiser(Na,2.5)';
 signal_final = iftx(signal_rA_src .* (H_azimuth.' * ones(1,Nr)));
 
 figure;
-imagesc(abs(signal_final));
+colormap('gray');
+imagesc(255 - abs(signal_final));
+grid on;
 title('Final Signal');
+
+figure;
+x = 1:Na;
+y = 1:Nr;
+[xx,yy] = meshgrid(x,y);
+surf(xx,yy,abs(signal_final));

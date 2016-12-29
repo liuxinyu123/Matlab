@@ -3,14 +3,12 @@
 
 clc,clear,close all;
 C = 3e8;%光速
-% fc = 8e9;%载波频率
-% lambda = C / fc;%波长
 lambda = 0.03;            %发射信号波长
 fc = C / lambda;          %发射信号中心频率
 v = 200;%雷达平台速度
 % h = 5000;
 D = 5;%天线长度
-theta = 45 / 180 * pi;%斜视角
+theta = 15 / 180 * pi;%斜视角
 beta = lambda / D;%波束宽度
 yc = 41.7e3;%场景中心斜距
 xc = yc * tan(theta);%以雷达波束中心穿越场景中心点时雷达坐标为（0，0）点，场景中心点的方位向坐标
@@ -91,153 +89,7 @@ for i = 1:ntargets
     
 end
  
-ff = linspace(-Fs/2,Fs/2,Nr);
-% REF_R = exp(-1i * pi * ff.^2 / kr);
-% signal_comp = ifty(fty(echo) .* (ones(Na,1) * REF_R));
-fdoc = 2*v*sin(theta)/lambda;%多普勒中心频率
-% mamb = round(fdoc / PRF);
-% fdoc = fdoc - mamb * PRF;
-t = tf - 2*rmid/C;%方式二生成匹配滤波器 ：fft之后取共轭
-ref_r = exp(1i*pi*kr*t.^2) .* (abs(t) < tr/2);
-signal_rfat = fty(echo) .* (ones(Na,1) * conj(fty(ref_r)));%.* (exp(-1i*pi*0.9*fdoc*ts).' * ones(1,Nr));
-signal_comp = ifty(signal_rfat);%距离脉压之后的信号
-% signal_comp = signal_comp .* (exp(-1i*pi*fdoc*ts).' * ones(1,Nr));
-signal_rtaf = ftx(signal_comp);
-signal_rfaf = ftx(signal_rfat);%二维信号
-% signal_rtat = iftx(ifty(signal_rfaf));
-% signal_rtaf = ftx(signal_comp);
-
-% figure;
-% subplot(211);
-% imagesc(abs(signal_comp));
-% subplot(212);
-% imagesc(abs(signal_rtat));
-fu = linspace(fdoc - PRF/2,fdoc + PRF/2,Na);%方位向频率
-d = sqrt(1 - (lambda * fu / 2 / v ).^2);
-ksrc = 2*v^2*fc^3*d.^3/C/yc./fu.^2;
-H_src = exp(-1i*pi*(ones(Na,1) * ff.^2)./(ksrc.' * ones(1,Nr)));
-signal_src = ifty(signal_rfaf .* H_src);
-% d = sqrt(1-(lambda*fdoc/2/v)^2);
-% ksrc = 2*v^2*fc^3*d^3/C/yc/fdoc;
-% ref_R = exp(1i*pi*(1/kr-1/ksrc)*ff.^2);
-% signal_comp = ifty(fty(echo) .* (ones(Na,1) * ref_R));
-
-% fu = linspace(fdoc + PRF/2,fdoc - PRF/2,Na);
-% fa = fftshift(fu);
-% fu = ka * ts;
-% d = sqrt(1 - (lambda*fu/2/v).^2);
-% ksrc = 2*v^2*fc^3*d.^3/C/yc/fdoc^2;
-% km = kr/(1 - kr / ksrc);
-% ref_r = exp(1i*pi*km*t.^2) .* (abs(t) < tr/2);
-% signal_comp1 = ifty(fty(echo) .* (ones(Na,1) * conj(fty(ref_r))));
-% t = tf - 2*rnear/C;
-% ref_src = exp(1i*pi*ksrc*t.^2) .* (abs(t) < tr/2);
-% H_src = exp(-1i*pi*(ones(Na,1) * ff.^2)./(ksrc.' * ones(1,Nr))); 
-% H_src = fty(ref_src);
-% H_src = exp(-1i * pi * yc * C / (2 * v^2 * fc^3) * ((fu.^2 ./ d.^3)' * ones(1,Nr)) .* f.^2);
-% signal_src = ifty(signal_rfaf .* H_src);
-
-% signal_RD = ftx(signal_comp);%距离多普勒域信号
-signal_RD = signal_src;
-% signal_rcmc = zeros(Na,Nr);%初始化
-% win = waitbar(0,'最近邻域插值');
-% for i = 1:Na
-%     for j = 1:Nr
-%         fai = fdoc + (i - Na/2) / Na * PRF;%方位向频率
-%         d = sqrt(1 - (lambda*fai/2/v)^2);%D
-%         r0 = (yc + (j - Nr/2)*Ts*C/2)*cos(theta);%最短斜距
-%         ksrc = 2*v^2*fc^3/C/r0*d^3/fai^2;%Ksrc
-%         
-%         rcm = r0*(1/d - 1);%rcm值 对应距离
-%         n_rcm = 2*rcm/C*Fs;%对应距离门
-%         
-%         delta_nrcm = n_rcm - floor(n_rcm);%小数部分
-%         
-%         if j + round(n_rcm) > Nr
-%             signal_rcmc(i,j) = signal_RD(i,Nr/2);
-%         else
-%             if delta_nrcm >= 0.5
-%                 signal_rcmc(i,j) = signal_RD(i,j+ceil(n_rcm));
-%             else
-%                 signal_rcmc(i,j) = signal_RD(i,j+floor(n_rcm));
-%             end
-%         end
-%     end
-%     waitbar(i/Na);
-% end
-% close(win);
-
-win = waitbar(0,'sinc 8点插值');
-corelen = 8;
-signal_rcmc = zeros(Na,Nr);
-
-for i = 1:Na
-    for j = corelen:Nr
-        fai = fdoc + (i - Na/2) / Na * PRF;%方位向频率
-        d = sqrt(1 - (lambda*fai/2/v)^2);%D
-        r0 = (yc + (j - Nr/2)*Ts*C/2)*cos(theta);%最短斜距
-%         ksrc = 2*v^2*fc^3/C/r0*d^3/fai^2;%Ksrc
-        
-        rcm = r0*(1/d - 1);%rcm值 对应距离
-        n_rcm = 2*rcm/C*Fs;%对应距离门
-        
-        delta_nrcm = n_rcm - floor(n_rcm);%小数部分
-        
-        for k = -corelen/2:corelen/2-1
-            if n_rcm+k+j > Nr
-                signal_rcmc(i,j) = signal_rcmc(i,j) + signal_RD(i,Nr) * sinc(k+n_rcm);
-            else
-                signal_rcmc(i,j) = signal_rcmc(i,j) + signal_RD(i,j+floor(n_rcm)+k) * sinc(k+delta_nrcm);
-            end
-        end
-    end
-       waitbar(i/Na);
-end
-close(win);
-
-fu = linspace(fdoc - PRF/2,fdoc + PRF/2,Na);%方位向频率
-% f = fftshift(fu);
-f = fu;
-d = sqrt(1 - (lambda*f/2/v).^2); 
-ref_A = exp(1i*4*pi/lambda*(ones(Na,1)*range) .* (d'*ones(1,Nr))) ;%方位脉压滤波器
-final_signal = iftx(signal_rcmc .* ref_A) .* (hamming(Na) * ones(1,Nr));
-
-figure;
-subplot(211);
-imagesc(abs(echo));
-xlabel('距离向');
-ylabel('方位向');
-title('回波信号');
-subplot(212);
-imagesc(abs(signal_comp));
-xlabel('距离向');
-ylabel('方位向');
-title('距离脉压之后的信号');
-
-figure;
-subplot(211);
-imagesc(abs(signal_RD));
-xlabel('距离向');
-ylabel('方位向');
-title('未进行RCMC距离多普勒信号');
-subplot(212);
-imagesc(abs(signal_rcmc));
-xlabel('距离向');
-ylabel('方位向');
-title('RCMC之后的距离多普勒信号');
-
-figure;
-imagesc(abs(final_signal));
-xlabel('距离向');
-ylabel('方位向');
-title('最终的点目标');
-
-figure;
-mesh(abs(final_signal));
-xlabel('距离向');
-ylabel('方位向');
-title('最终的点目标');
-
-figure;
-plot(20*log10(abs(final_signal) / abs(max(max(final_signal)))));
-title('峰值旁瓣比');
+%%%%%%%%%%%%%%%%%%%Range Compression %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+f_range = [-Nr/2:Nr/2-1]/Nr*Fs;
+H_range = exp(1i*pi*f_range.^2/kr) .* kaiser(Nr,2.5)';
+signal_comp = ifty(fty(echo) .* (ones(Na,1) * H_range));
